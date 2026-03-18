@@ -5,6 +5,15 @@ export type WatchlistEntry = {
   amountKrw: number;
 };
 
+export type DraftRow = {
+  id: string;
+  query: string;
+  symbol: string;
+  name: string;
+  exchange: string;
+  amountKrw: string;
+};
+
 export type StockSeriesPoint = {
   datetime: string;
   close: number;

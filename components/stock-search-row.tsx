@@ -1,16 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { SymbolSearchResult } from "@/lib/types";
-
-export type DraftRow = {
-  id: string;
-  query: string;
-  symbol: string;
-  name: string;
-  exchange: string;
-  amountKrw: string;
-};
+import { DraftRow, SymbolSearchResult } from "@/lib/types";
 
 type StockSearchRowProps = {
   index: number;

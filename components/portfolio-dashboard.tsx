@@ -1,8 +1,9 @@
 "use client";
 
+import Link from "next/link";
 import { useEffect, useMemo, useState } from "react";
 import { StockChart } from "@/components/stock-chart";
-import { DraftRow, StockSearchRow } from "@/components/stock-search-row";
+import { useTheme } from "@/components/theme-provider";
 import {
   StockChartResponse,
   StocksApiResponse,
@@ -10,90 +11,10 @@ import {
   StockSnapshot,
   WatchlistEntry
 } from "@/lib/types";
-
-const STORAGE_KEY = "stock-board-budget-watchlist-v4";
-const THEME_STORAGE_KEY = "stock-board-theme";
-const LEGACY_STORAGE_KEYS = [
-  "stock-board-budget-watchlist-v3",
-  "stock-board-budget-watchlist-v2"
-];
-const DEFAULT_WATCHLIST: WatchlistEntry[] = [
-  { symbol: "AAPL", name: "Apple Inc", exchange: "NASDAQ", amountKrw: 1_000_000 },
-  { symbol: "016360", name: "Samsung Securities Co Ltd", exchange: "KRX", amountKrw: 100_000 }
-];
-
-function createDraftRow(entry?: Partial<WatchlistEntry>): DraftRow {
-  return {
-    id: globalThis.crypto?.randomUUID?.() ?? `${Date.now()}-${Math.random()}`,
-    query: entry?.name ?? entry?.symbol ?? "",
-    symbol: entry?.symbol ?? "",
-    name: entry?.name ?? "",
-    exchange: entry?.exchange ?? "",
-    amountKrw: entry?.amountKrw ? String(entry.amountKrw) : ""
-  };
-}
-
-function normalizeAmount(input: string) {
-  return input.replace(/[^\d.]/g, "");
-}
-
-function parseWatchlist(input: unknown): WatchlistEntry[] {
-  if (!Array.isArray(input)) {
-    return [];
-  }
-
-  const parsed: WatchlistEntry[] = [];
-
-  input.forEach((entry) => {
-    if (!entry || typeof entry !== "object") {
-      return;
-    }
-
-    const row = entry as Partial<WatchlistEntry>;
-    const symbol = row.symbol?.trim().toUpperCase();
-    const amountKrw = Number(row.amountKrw);
-
-    if (!symbol || !Number.isFinite(amountKrw) || amountKrw <= 0) {
-      return;
-    }
-
-    parsed.push({
-        symbol,
-        name: row.name?.trim() || symbol,
-        exchange: row.exchange?.trim() || "",
-        amountKrw
-    });
-  });
-
-  return parsed;
-}
-
-function parseDraftRows(rows: DraftRow[]): WatchlistEntry[] {
-  const grouped = rows
-    .map((row) => ({
-      symbol: row.symbol.trim().toUpperCase(),
-      name: row.name.trim() || row.symbol.trim().toUpperCase(),
-      exchange: row.exchange.trim(),
-      amountKrw: Number(normalizeAmount(row.amountKrw))
-    }))
-    .filter((row) => row.symbol && Number.isFinite(row.amountKrw) && row.amountKrw > 0)
-    .reduce<Map<string, WatchlistEntry>>((map, row) => {
-      const existing = map.get(row.symbol);
-      map.set(row.symbol, {
-        symbol: row.symbol,
-        name: row.name,
-        exchange: row.exchange || existing?.exchange || "",
-        amountKrw: (existing?.amountKrw ?? 0) + row.amountKrw
-      });
-      return map;
-    }, new Map());
-
-  return Array.from(grouped.values());
-}
-
-function buildDraftRows(entries: WatchlistEntry[]) {
-  return entries.length ? entries.map((entry) => createDraftRow(entry)) : [createDraftRow()];
-}
+import {
+  DEFAULT_WATCHLIST,
+  loadPersistedWatchlist
+} from "@/lib/portfolio";
 
 function formatMoney(value: number, currency = "USD") {
   return new Intl.NumberFormat("ko-KR", {
@@ -110,7 +31,7 @@ function formatNumber(value: number, digits = 0) {
   }).format(value);
 }
 
-function formatDateTime(value: string | null) {
+function formatPreciseTime(value: string | null) {
   if (!value) {
     return "-";
   }
@@ -121,11 +42,28 @@ function formatDateTime(value: string | null) {
   }
 
   return new Intl.DateTimeFormat("ko-KR", {
-    month: "short",
-    day: "numeric",
     hour: "2-digit",
-    minute: "2-digit"
+    minute: "2-digit",
+    second: "2-digit"
   }).format(date);
+}
+
+function formatRelativeTime(value: string | null, nowMs: number) {
+  if (!value) {
+    return "-";
+  }
+
+  const diffSeconds = Math.max(0, Math.floor((nowMs - new Date(value).getTime()) / 1000));
+  if (diffSeconds < 60) {
+    return `${diffSeconds}초 전`;
+  }
+
+  const diffMinutes = Math.floor(diffSeconds / 60);
+  if (diffMinutes < 60) {
+    return `${diffMinutes}분 전`;
+  }
+
+  return `${Math.floor(diffMinutes / 60)}시간 전`;
 }
 
 function joinSymbols(entries: WatchlistEntry[]) {
@@ -140,20 +78,8 @@ function estimateUnits(amountKrw: number, priceKrw: number) {
   return amountKrw / priceKrw;
 }
 
-function sameWatchlistBySymbolAndAmount(left: WatchlistEntry[], right: WatchlistEntry[]) {
-  if (left.length !== right.length) {
-    return false;
-  }
-
-  return left.every(
-    (entry, index) =>
-      entry.symbol === right[index]?.symbol && entry.amountKrw === right[index]?.amountKrw
-  );
-}
-
 export function PortfolioDashboard() {
-  const [theme, setTheme] = useState<"light" | "dark">("light");
-  const [draftRows, setDraftRows] = useState<DraftRow[]>(buildDraftRows(DEFAULT_WATCHLIST));
+  const { theme, toggleTheme } = useTheme();
   const [watchlist, setWatchlist] = useState<WatchlistEntry[]>(DEFAULT_WATCHLIST);
   const [selectedSymbol, setSelectedSymbol] = useState(DEFAULT_WATCHLIST[0].symbol);
   const [items, setItems] = useState<StockSnapshot[]>([]);
@@ -166,60 +92,43 @@ export function PortfolioDashboard() {
   const [updatedAt, setUpdatedAt] = useState<string | null>(null);
   const [chartUpdatedAt, setChartUpdatedAt] = useState<string | null>(null);
   const [refreshNonce, setRefreshNonce] = useState(0);
+  const [nowMs, setNowMs] = useState(Date.now());
 
   useEffect(() => {
-    const storedTheme = window.localStorage.getItem(THEME_STORAGE_KEY);
-    const nextTheme =
-      storedTheme === "dark" || storedTheme === "light"
-        ? storedTheme
-        : window.matchMedia("(prefers-color-scheme: dark)").matches
-          ? "dark"
-          : "light";
-
-    setTheme(nextTheme);
-    document.documentElement.dataset.theme = nextTheme;
+    const nextWatchlist = loadPersistedWatchlist();
+    setWatchlist(nextWatchlist);
+    setSelectedSymbol(nextWatchlist[0].symbol);
   }, []);
 
   useEffect(() => {
-    document.documentElement.dataset.theme = theme;
-    window.localStorage.setItem(THEME_STORAGE_KEY, theme);
-  }, [theme]);
+    function syncNow() {
+      setNowMs(Date.now());
+    }
+
+    syncNow();
+    const timer = window.setInterval(syncNow, 1000);
+
+    return () => {
+      window.clearInterval(timer);
+    };
+  }, []);
 
   useEffect(() => {
-    const nextStored =
-      window.localStorage.getItem(STORAGE_KEY) ??
-      LEGACY_STORAGE_KEYS.map((key) => window.localStorage.getItem(key)).find(Boolean) ??
-      null;
-
-    if (!nextStored) {
-      window.localStorage.setItem(STORAGE_KEY, JSON.stringify(DEFAULT_WATCHLIST));
-      return;
-    }
-
-    try {
-      const parsed = parseWatchlist(JSON.parse(nextStored));
-      if (!parsed.length) {
-        window.localStorage.setItem(STORAGE_KEY, JSON.stringify(DEFAULT_WATCHLIST));
-        return;
-      }
-
-      const nextWatchlist = sameWatchlistBySymbolAndAmount(parsed, [
-        { symbol: "AAPL", name: "AAPL", amountKrw: 1_000_000 }
-      ])
-        ? DEFAULT_WATCHLIST
-        : parsed.map((entry) => ({
-            ...entry,
-            name: entry.name || entry.symbol
-          }));
-
+    function syncWatchlist() {
+      const nextWatchlist = loadPersistedWatchlist();
       setWatchlist(nextWatchlist);
-      setDraftRows(buildDraftRows(nextWatchlist));
-      setSelectedSymbol(nextWatchlist[0].symbol);
-      window.localStorage.setItem(STORAGE_KEY, JSON.stringify(nextWatchlist));
-      LEGACY_STORAGE_KEYS.forEach((key) => window.localStorage.removeItem(key));
-    } catch {
-      window.localStorage.removeItem(STORAGE_KEY);
+      setSelectedSymbol((current) =>
+        nextWatchlist.some((entry) => entry.symbol === current) ? current : nextWatchlist[0]?.symbol ?? ""
+      );
     }
+
+    window.addEventListener("focus", syncWatchlist);
+    window.addEventListener("storage", syncWatchlist);
+
+    return () => {
+      window.removeEventListener("focus", syncWatchlist);
+      window.removeEventListener("storage", syncWatchlist);
+    };
   }, []);
 
   useEffect(() => {
@@ -366,39 +275,6 @@ export function PortfolioDashboard() {
   const selectedEstimatedUnits =
     selectedEntry && selectedStock ? estimateUnits(selectedEntry.amountKrw, selectedStock.priceKrw) : 0;
 
-  function updateRow(id: string, patch: Partial<DraftRow>) {
-    setDraftRows((current) => current.map((row) => (row.id === id ? { ...row, ...patch } : row)));
-  }
-
-  function addRow() {
-    setDraftRows((current) => [...current, createDraftRow()]);
-  }
-
-  function removeRow(id: string) {
-    setDraftRows((current) => (current.length === 1 ? current : current.filter((row) => row.id !== id)));
-  }
-
-  function handleApply() {
-    const unresolvedRows = draftRows.filter((row) => row.query.trim() && !row.symbol);
-    if (unresolvedRows.length) {
-      setMessage("검색 결과에서 종목을 선택하지 않은 행이 있습니다. 이름 입력 후 목록에서 눌러 주세요.");
-      return;
-    }
-
-    const parsed = parseDraftRows(draftRows);
-    setMessage(null);
-    setWatchlist(parsed);
-    setSelectedSymbol(parsed[0]?.symbol ?? "");
-    window.localStorage.setItem(STORAGE_KEY, JSON.stringify(parsed));
-  }
-
-  function handleReset() {
-    setDraftRows(buildDraftRows(DEFAULT_WATCHLIST));
-    setWatchlist(DEFAULT_WATCHLIST);
-    setSelectedSymbol(DEFAULT_WATCHLIST[0].symbol);
-    window.localStorage.setItem(STORAGE_KEY, JSON.stringify(DEFAULT_WATCHLIST));
-  }
-
   function handleRefresh() {
     setRefreshNonce((current) => current + 1);
   }
@@ -407,13 +283,13 @@ export function PortfolioDashboard() {
     <main className="shell">
       <section className="shell-topbar">
         <div className="shell-topbar-copy">
-          <strong>Focus Board</strong>
+          <strong>Deskfolio</strong>
           <span>야간모드와 조용한 대비로 오래 켜두기 쉬운 화면</span>
         </div>
         <button
           className="ghost-btn"
           type="button"
-          onClick={() => setTheme((current) => (current === "dark" ? "light" : "dark"))}
+          onClick={toggleTheme}
         >
           {theme === "dark" ? "주간모드" : "야간모드"}
         </button>
@@ -422,40 +298,32 @@ export function PortfolioDashboard() {
       <section className="dashboard">
         <aside className="panel sidebar">
           <div className="panel-title">
-            <h2>종목 / 금액 입력</h2>
+            <h2>보유 종목</h2>
             <span className="subtle">{watchlist.length}개 추적 중</span>
           </div>
           <p className="hint">
-            종목명으로 검색해서 선택한 뒤 금액을 넣는 방식으로 바꿨습니다. 티커를 외울 필요 없이
-            이름으로 찾고, 실제 저장은 선택된 심볼로 처리합니다.
+            메인 화면은 확인 전용입니다. 보유 종목과 금액 입력은 별도 페이지에서 정리한 뒤 여기서
+            전체 현황과 상세 차트를 확인합니다.
           </p>
 
-          <div className="editor-list">
-            {draftRows.map((row, index) => (
-              <StockSearchRow
-                key={row.id}
-                index={index}
-                row={row}
-                canRemove={draftRows.length > 1}
-                onChange={updateRow}
-                onRemove={removeRow}
-              />
-            ))}
-          </div>
-
           <div className="toolbar">
-            <button className="primary-btn" type="button" onClick={handleApply}>
-              종목 적용
-            </button>
+            <Link className="primary-btn sidebar-link-btn" href="/portfolio">
+              종목 입력 페이지
+            </Link>
             <button className="ghost-btn" type="button" onClick={handleRefresh}>
               시세 새로고침
             </button>
-            <button className="ghost-btn" type="button" onClick={addRow}>
-              행 추가
-            </button>
-            <button className="ghost-btn" type="button" onClick={handleReset}>
-              예시 종목 복원
-            </button>
+          </div>
+
+          <div className="timestamp-box">
+            <span>시세 마지막 갱신</span>
+            <strong>{formatPreciseTime(updatedAt)}</strong>
+            <small>{formatRelativeTime(updatedAt, nowMs)}</small>
+          </div>
+          <div className="timestamp-box">
+            <span>차트 마지막 갱신</span>
+            <strong>{formatPreciseTime(chartUpdatedAt)}</strong>
+            <small>{formatRelativeTime(chartUpdatedAt, nowMs)}</small>
           </div>
 
           <div className="snapshot-list">
@@ -487,7 +355,7 @@ export function PortfolioDashboard() {
         <div className="main">
           {message ? <div className="error-box">{message}</div> : null}
           <div className="subtle" style={{ marginTop: -8 }}>
-            목록은 적용/새로고침 때만 다시 조회하고, 차트는 선택한 종목만 별도로 불러옵니다.
+            목록은 수동 새로고침 또는 저장 후 반영되고, 차트는 선택한 종목만 별도로 불러옵니다.
           </div>
           {errors.length > 0 ? (
             <div className="error-box">
@@ -534,7 +402,9 @@ export function PortfolioDashboard() {
                 <div>
                   <div className="ticker-line">
                     <span className="ticker-pill">{selectedStock.exchange || selectedEntry.exchange || "Market"}</span>
-                    <span className="subtle">최근 갱신 {formatDateTime(selectedStock.lastUpdated)}</span>
+                    <span className="subtle">
+                      최근 갱신 {formatPreciseTime(selectedStock.lastUpdated)} · {formatRelativeTime(selectedStock.lastUpdated, nowMs)}
+                    </span>
                   </div>
                   <h2 className="hero-title">
                     {selectedStock.name}
@@ -587,9 +457,9 @@ export function PortfolioDashboard() {
                   </div>
                   <span className="subtle">
                     {chartUpdatedAt
-                      ? `차트 갱신 ${formatDateTime(chartUpdatedAt)}`
+                      ? `차트 갱신 ${formatPreciseTime(chartUpdatedAt)} · ${formatRelativeTime(chartUpdatedAt, nowMs)}`
                       : updatedAt
-                        ? `시세 갱신 ${formatDateTime(updatedAt)}`
+                        ? `시세 갱신 ${formatPreciseTime(updatedAt)} · ${formatRelativeTime(updatedAt, nowMs)}`
                         : ""}
                   </span>
                 </div>

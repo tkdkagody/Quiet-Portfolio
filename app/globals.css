@@ -334,6 +334,37 @@ textarea {
   cursor: not-allowed;
 }
 
+.sidebar-link-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  text-decoration: none;
+}
+
+.timestamp-box {
+  display: grid;
+  gap: 4px;
+  padding: 12px 14px;
+  margin-top: 12px;
+  border-radius: 18px;
+  background: rgba(255, 255, 255, 0.7);
+  border: 1px solid rgba(20, 33, 61, 0.08);
+}
+
+.timestamp-box span,
+.timestamp-box small {
+  color: var(--muted);
+}
+
+.timestamp-box strong {
+  font-size: 1rem;
+}
+
+[data-theme="dark"] .timestamp-box {
+  background: rgba(24, 31, 43, 0.82);
+  border-color: rgba(151, 166, 187, 0.12);
+}
+
 .snapshot-list {
   display: grid;
   gap: 10px;
@@ -607,6 +638,50 @@ textarea {
   text-align: right;
 }
 
+.page-actions {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  flex-wrap: wrap;
+}
+
+.editor-layout {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) 320px;
+  gap: 20px;
+  align-items: start;
+}
+
+.editor-page-panel,
+.editor-help-panel {
+  padding: 24px;
+}
+
+.editor-help-list {
+  display: grid;
+  gap: 12px;
+}
+
+.editor-help-item {
+  display: grid;
+  gap: 6px;
+  padding: 14px;
+  border-radius: 18px;
+  background: rgba(255, 255, 255, 0.72);
+  border: 1px solid rgba(20, 33, 61, 0.08);
+}
+
+.editor-help-item span {
+  color: var(--muted);
+  font-size: 0.88rem;
+  line-height: 1.5;
+}
+
+[data-theme="dark"] .editor-help-item {
+  background: rgba(24, 31, 43, 0.82);
+  border-color: rgba(151, 166, 187, 0.12);
+}
+
 .empty,
 .error-box,
 .loading-box {
@@ -627,6 +702,10 @@ textarea {
 
 @media (max-width: 1080px) {
   .dashboard {
+    grid-template-columns: 1fr;
+  }
+
+  .editor-layout {
     grid-template-columns: 1fr;
   }
 
@@ -652,6 +731,10 @@ textarea {
   .shell-topbar {
     align-items: start;
     flex-direction: column;
+  }
+
+  .page-actions {
+    width: 100%;
   }
 
   .hero-card {
