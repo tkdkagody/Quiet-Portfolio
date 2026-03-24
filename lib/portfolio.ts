@@ -91,11 +91,37 @@ export function parseDraftRows(rows: DraftRow[]): WatchlistEntry[] {
       return map;
     }, new Map());
 
-  return Array.from(grouped.values());
+  return sortWatchlistDesc(Array.from(grouped.values()));
 }
 
 export function buildDraftRows(entries: WatchlistEntry[]) {
   return entries.length ? entries.map((entry) => createDraftRow(entry)) : [createDraftRow()];
+}
+
+export function sortWatchlistDesc(entries: WatchlistEntry[]) {
+  return [...entries].sort((left, right) => right.symbol.localeCompare(left.symbol));
+}
+
+export function buildEditorRows(entries: WatchlistEntry[]) {
+  const ordered = sortWatchlistDesc(entries);
+  return [createDraftRow(), ...ordered.map((entry) => createDraftRow(entry))];
+}
+
+function isDefaultWatchlist(entries: WatchlistEntry[]) {
+  return (
+    entries.length === DEFAULT_WATCHLIST.length &&
+    entries.every((entry, index) => {
+      const baseline = DEFAULT_WATCHLIST[index];
+      return (
+        !!baseline &&
+        entry.symbol === baseline.symbol &&
+        entry.name === baseline.name &&
+        entry.exchange === baseline.exchange &&
+        entry.shares === baseline.shares &&
+        entry.avgPriceUsd === baseline.avgPriceUsd
+      );
+    })
+  );
 }
 
 export function loadPersistedWatchlist() {
@@ -105,23 +131,28 @@ export function loadPersistedWatchlist() {
     null;
 
   if (!nextStored) {
-    window.localStorage.setItem(STORAGE_KEY, JSON.stringify(DEFAULT_WATCHLIST));
-    return DEFAULT_WATCHLIST;
+    return [];
   }
 
   try {
     const parsed = parseWatchlist(JSON.parse(nextStored));
     if (!parsed.length) {
-      window.localStorage.setItem(STORAGE_KEY, JSON.stringify(DEFAULT_WATCHLIST));
-      return DEFAULT_WATCHLIST;
+      window.localStorage.removeItem(STORAGE_KEY);
+      return [];
     }
 
-    window.localStorage.setItem(STORAGE_KEY, JSON.stringify(parsed));
+    if (isDefaultWatchlist(parsed)) {
+      window.localStorage.removeItem(STORAGE_KEY);
+      LEGACY_STORAGE_KEYS.forEach((key) => window.localStorage.removeItem(key));
+      return [];
+    }
+
+    const ordered = sortWatchlistDesc(parsed);
+    window.localStorage.setItem(STORAGE_KEY, JSON.stringify(ordered));
     LEGACY_STORAGE_KEYS.forEach((key) => window.localStorage.removeItem(key));
-    return parsed;
+    return ordered;
   } catch {
     window.localStorage.removeItem(STORAGE_KEY);
-    window.localStorage.setItem(STORAGE_KEY, JSON.stringify(DEFAULT_WATCHLIST));
-    return DEFAULT_WATCHLIST;
+    return [];
   }
 }

@@ -175,7 +175,7 @@ export function StockSearchRow({
         <input
           value={row.note}
           onChange={(event) => onChange(row.id, { note: event.target.value })}
-          placeholder="예: 은퇴용 배당주"
+          placeholder="예: 장기 보유"
         />
       </label>
     </div>

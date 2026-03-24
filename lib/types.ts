@@ -44,6 +44,7 @@ export type DividendEvent = {
   declarationDate: string;
   dividendPerShare: number;
   adjustedDividend?: number;
+  frequency?: number;
   currency: string;
 };
 
@@ -55,6 +56,14 @@ export type HoldingSnapshot = {
   annualDividend: number;
   monthlyDividend: number;
   yieldPercent: number;
+  currentAnnualDividendPerShare: number;
+  currentAnnualDividend: number;
+  currentMonthlyDividend: number;
+  currentYieldPercent: number;
+  expectedAnnualDividendPerShare: number;
+  expectedAnnualDividend: number;
+  expectedMonthlyDividend: number;
+  expectedYieldPercent: number;
   nextExDate: string | null;
   nextPaymentDate: string | null;
   warnings?: string[];
@@ -72,6 +81,10 @@ export type PortfolioSnapshot = {
   totalGain: number;
   totalMonthlyDividend: number;
   totalAnnualDividend: number;
+  currentMonthlyDividend: number;
+  currentAnnualDividend: number;
+  expectedMonthlyDividend: number;
+  expectedAnnualDividend: number;
   warnings?: string[];
 };
 

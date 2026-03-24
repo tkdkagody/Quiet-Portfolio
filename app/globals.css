@@ -390,25 +390,29 @@ textarea {
 }
 
 .editor-grid {
-  grid-template-columns: minmax(0, 1.45fr) minmax(300px, 0.8fr);
+  grid-template-columns: minmax(0, 0.9fr) minmax(340px, 1.1fr);
 }
 
 .editor-board {
   display: grid;
-  gap: 14px;
+  gap: 12px;
+  padding: 16px;
 }
 
-.editor-help {
+.editor-preview {
+  display: grid;
+  gap: 12px;
+  padding: 16px;
+  position: sticky;
+  top: 24px;
+}
+
+.editor-preview-list {
   display: grid;
   gap: 12px;
 }
 
-.editor-help-list {
-  display: grid;
-  gap: 12px;
-}
-
-.editor-help-item {
+.editor-preview-item {
   display: grid;
   gap: 6px;
   padding: 14px;
@@ -417,15 +421,31 @@ textarea {
   border: 1px solid rgba(20, 33, 61, 0.08);
 }
 
-[data-theme="dark"] .editor-help-item {
+[data-theme="dark"] .editor-preview-item {
   background: rgba(255, 255, 255, 0.03);
   border-color: rgba(151, 166, 187, 0.12);
 }
 
-.editor-help-item span {
+.editor-preview-main {
+  display: grid;
+  gap: 4px;
+}
+
+.editor-preview-main strong {
+  font-size: 0.98rem;
+}
+
+.editor-preview-main span,
+.editor-preview-meta {
   color: var(--muted);
   font-size: 0.88rem;
   line-height: 1.55;
+}
+
+.editor-preview-meta {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px 12px;
 }
 
 .editor-message {
@@ -565,7 +585,7 @@ textarea {
 }
 
 .editor-row {
-  padding: 14px;
+  padding: 12px;
   border-radius: 20px;
   border: 1px solid rgba(20, 33, 61, 0.08);
   background: rgba(255, 255, 255, 0.72);
@@ -605,7 +625,7 @@ textarea {
   border: 1px solid var(--line);
   border-radius: 14px;
   background: rgba(255, 255, 255, 0.92);
-  padding: 12px 14px;
+  padding: 10px 12px;
   color: var(--text);
 }
 
@@ -645,7 +665,7 @@ textarea {
   border: 1px solid rgba(20, 33, 61, 0.08);
   background: rgba(255, 255, 255, 0.88);
   border-radius: 14px;
-  padding: 11px 12px;
+  padding: 10px 12px;
   cursor: pointer;
 }
 
@@ -664,7 +684,8 @@ textarea {
   display: flex;
   gap: 10px;
   flex-wrap: wrap;
-  margin-top: 12px;
+  margin-top: 0;
+  margin-bottom: 4px;
 }
 
 .primary-btn,

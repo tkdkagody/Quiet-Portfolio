@@ -227,6 +227,22 @@ function estimateAnnualDividendPerShare(dividends: DividendEvent[]) {
   return annual > 0 ? annual : dividends[0]?.dividendPerShare ?? 0;
 }
 
+function estimateForwardAnnualDividendPerShare(dividends: DividendEvent[]) {
+  if (!dividends.length) {
+    return 0;
+  }
+
+  const latest = dividends[0];
+  const frequency = Math.max(1, Math.floor(latest.frequency ?? 0));
+  const base = latest.adjustedDividend ?? latest.dividendPerShare;
+
+  if (base > 0) {
+    return base * frequency;
+  }
+
+  return estimateAnnualDividendPerShare(dividends);
+}
+
 export async function loadStockQuote(symbol: string): Promise<StockSnapshot> {
   return (await loadStockQuoteWithWarning(symbol)).quote;
 }
@@ -257,9 +273,13 @@ export async function loadHoldingSnapshot(holding: WatchlistEntry): Promise<Hold
   }
 
   const annualDividendPerShare = estimateAnnualDividendPerShare(dividends);
-  const annualDividend = annualDividendPerShare * holding.shares;
-  const monthlyDividend = annualDividend / 12;
-  const yieldPercent = quote.priceUsd > 0 ? (annualDividendPerShare / quote.priceUsd) * 100 : 0;
+  const expectedAnnualDividendPerShare = estimateForwardAnnualDividendPerShare(dividends) || annualDividendPerShare;
+  const currentAnnualDividend = annualDividendPerShare * holding.shares;
+  const currentMonthlyDividend = currentAnnualDividend / 12;
+  const expectedAnnualDividend = expectedAnnualDividendPerShare * holding.shares;
+  const expectedMonthlyDividend = expectedAnnualDividend / 12;
+  const currentYieldPercent = quote.priceUsd > 0 ? (annualDividendPerShare / quote.priceUsd) * 100 : 0;
+  const expectedYieldPercent = quote.priceUsd > 0 ? (expectedAnnualDividendPerShare / quote.priceUsd) * 100 : 0;
   const futureDividend =
     dividends.find((item) => new Date(item.date).getTime() > Date.now()) ??
     dividends[0] ??
@@ -270,9 +290,17 @@ export async function loadHoldingSnapshot(holding: WatchlistEntry): Promise<Hold
     quote,
     dividends,
     annualDividendPerShare,
-    annualDividend,
-    monthlyDividend,
-    yieldPercent,
+    annualDividend: expectedAnnualDividend,
+    monthlyDividend: expectedMonthlyDividend,
+    yieldPercent: expectedYieldPercent,
+    currentAnnualDividendPerShare: annualDividendPerShare,
+    currentAnnualDividend,
+    currentMonthlyDividend,
+    currentYieldPercent,
+    expectedAnnualDividendPerShare,
+    expectedAnnualDividend,
+    expectedMonthlyDividend,
+    expectedYieldPercent,
     nextExDate: futureDividend?.date ?? null,
     nextPaymentDate: futureDividend?.paymentDate ?? null,
     warnings: [
@@ -310,6 +338,14 @@ export async function loadPortfolioSnapshot(holdings: WatchlistEntry[]): Promise
       annualDividend: 0,
       monthlyDividend: 0,
       yieldPercent: 0,
+      currentAnnualDividendPerShare: 0,
+      currentAnnualDividend: 0,
+      currentMonthlyDividend: 0,
+      currentYieldPercent: 0,
+      expectedAnnualDividendPerShare: 0,
+      expectedAnnualDividend: 0,
+      expectedMonthlyDividend: 0,
+      expectedYieldPercent: 0,
       nextExDate: null,
       nextPaymentDate: null,
       warnings: ["값이 없습니다"],
@@ -322,8 +358,10 @@ export async function loadPortfolioSnapshot(holdings: WatchlistEntry[]): Promise
 
   const totalCost = items.reduce((sum, item) => sum + item.holding.shares * item.holding.avgPriceUsd, 0);
   const totalValue = items.reduce((sum, item) => sum + item.holding.shares * item.quote.priceUsd, 0);
-  const totalAnnualDividend = items.reduce((sum, item) => sum + item.annualDividend, 0);
-  const totalMonthlyDividend = items.reduce((sum, item) => sum + item.monthlyDividend, 0);
+  const currentAnnualDividend = items.reduce((sum, item) => sum + item.currentAnnualDividend, 0);
+  const currentMonthlyDividend = items.reduce((sum, item) => sum + item.currentMonthlyDividend, 0);
+  const expectedAnnualDividend = items.reduce((sum, item) => sum + item.expectedAnnualDividend, 0);
+  const expectedMonthlyDividend = items.reduce((sum, item) => sum + item.expectedMonthlyDividend, 0);
 
   return {
     items,
@@ -331,8 +369,12 @@ export async function loadPortfolioSnapshot(holdings: WatchlistEntry[]): Promise
     totalCost,
     totalValue,
     totalGain: totalValue - totalCost,
-    totalAnnualDividend,
-    totalMonthlyDividend,
+    totalAnnualDividend: expectedAnnualDividend,
+    totalMonthlyDividend: expectedMonthlyDividend,
+    currentAnnualDividend,
+    currentMonthlyDividend,
+    expectedAnnualDividend,
+    expectedMonthlyDividend,
     warnings: items.flatMap((item) => item.warnings ?? [])
   };
 }

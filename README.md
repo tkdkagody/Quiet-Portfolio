@@ -1,6 +1,6 @@
 # Deskfolio
 
-미국 배당주 보유 내역을 노트처럼 정리하고, 최근 종가, 손익, 배당락일, 지급일, 예상 월배당/연배당을 확인하는 Next.js 앱입니다.
+미국 종목 보유 내역을 노트처럼 정리하고, 최근 종가, 손익, 일정, 예상 월배당/연배당을 확인하는 Next.js 앱입니다.
 
 ## 실행
 
@@ -48,5 +48,5 @@ npm run dev
 
 - `app/api/portfolio/route.ts`: 최근 종가, 배당, 손익, 월배당 계산
 - `app/api/stocks/chart/route.ts`: 선택 종목 차트만 별도 전달
-- `components/portfolio-dashboard.tsx`: 배당 투자 노트와 요약 화면
+- `components/portfolio-dashboard.tsx`: 노트와 요약 화면
 - `components/stock-chart.tsx`: 외부 차트 라이브러리 없이 SVG로 30일 추세 렌더링

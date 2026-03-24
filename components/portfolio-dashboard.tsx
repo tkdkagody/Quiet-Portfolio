@@ -276,10 +276,13 @@ export function PortfolioDashboard() {
       <section className="note-topbar">
         <div className="note-topbar-copy">
           <span className="note-kicker">Deskfolio</span>
-          <h1>배당 투자 노트</h1>
+          <h1>노트</h1>
           <p>보유 종목, 평단, 배당락일, 지급일, 예상 배당금을 메모처럼 정리합니다. 최근 종가를 기준으로 보여줍니다.</p>
         </div>
         <div className="note-actions">
+          <Link className="ghost-btn" href="/dividends">
+            예상 배당금
+          </Link>
           <Link className="ghost-btn" href="/portfolio">
             종목 입력
           </Link>
