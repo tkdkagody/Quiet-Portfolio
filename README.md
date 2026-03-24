@@ -1,6 +1,6 @@
 # Deskfolio
 
-보유 주식의 현재가, 원화 환산 단가, 적용 환율, 선택 종목 30일 차트를 한 화면에서 확인하는 Next.js 대시보드입니다.
+미국 배당주 보유 내역을 노트처럼 정리하고, 최근 종가, 손익, 배당락일, 지급일, 예상 월배당/연배당을 확인하는 Next.js 앱입니다.
 
 ## 실행
 
@@ -16,7 +16,7 @@ npm install
 cp .env.example .env.local
 ```
 
-`TWELVE_DATA_API_KEY`에 [Twelve Data](https://twelvedata.com/docs)의 API 키를 넣어 주세요.
+`POLYGON_API_KEY`에 [Polygon](https://polygon.io/pricing)의 API 키를 넣어 주세요.
 
 3. 개발 서버 실행
 
@@ -30,20 +30,23 @@ npm run dev
 
 입력 페이지에서 아래 순서로 입력합니다.
 
-- 종목명 또는 티커 검색: `애플`, `삼성증권`, `AAPL` 같은 검색어 입력 후 결과 선택
-- 투자금액 (KRW): `1000000` 같은 원화 금액
+- 종목명 또는 티커 검색: `SCHD`, `Coca-Cola`, `AAPL` 같은 검색어 입력 후 결과 선택
+- 보유수량: `10` 같은 주식 수량
+- 평단가 (USD): `75.00` 같은 평균 매수가
+- 메모: 배당 목적, 매수 이유, 리밸런싱 기준 등 짧은 기록
 
-기본 예시는 `AAPL / 1,000,000원`, `삼성증권(016360) / 100,000원`입니다.
+기본 예시는 `SCHD / 10주 / $75`, `KO / 8주 / $58`입니다.
 
-## API 사용량 최적화
+## API 사용 방식
 
-- 전체 종목 목록은 현재가와 환율만 조회
-- 30일 차트는 선택한 종목만 별도 조회
-- 자동 1분 새로고침 대신 수동 `시세 새로고침` 버튼 사용
+- 포트폴리오 요약은 `POST /api/portfolio`
+- 차트는 선택한 종목만 `GET /api/stocks/chart`
+- 종목 검색은 `GET /api/symbol-search`
+- 최근 종가는 수동 `새로고침` 버튼으로만 갱신
 
 ## 구현 포인트
 
-- `app/api/stocks/route.ts`: 전체 종목 현재가/환율 전달
+- `app/api/portfolio/route.ts`: 최근 종가, 배당, 손익, 월배당 계산
 - `app/api/stocks/chart/route.ts`: 선택 종목 차트만 별도 전달
-- `components/portfolio-dashboard.tsx`: 행 단위 입력 UI와 로컬 스토리지 기반 종목 관리
+- `components/portfolio-dashboard.tsx`: 배당 투자 노트와 요약 화면
 - `components/stock-chart.tsx`: 외부 차트 라이브러리 없이 SVG로 30일 추세 렌더링

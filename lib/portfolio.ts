@@ -1,15 +1,16 @@
 import { DraftRow, WatchlistEntry } from "@/lib/types";
 
-export const STORAGE_KEY = "stock-board-budget-watchlist-v4";
-export const THEME_STORAGE_KEY = "stock-board-theme";
-export const LEGACY_STORAGE_KEYS = [
+export const STORAGE_KEY = "deskfolio-watchlist-v5";
+export const THEME_STORAGE_KEY = "deskfolio-theme";
+const LEGACY_STORAGE_KEYS = [
+  "stock-board-budget-watchlist-v4",
   "stock-board-budget-watchlist-v3",
   "stock-board-budget-watchlist-v2"
 ];
 
 export const DEFAULT_WATCHLIST: WatchlistEntry[] = [
-  { symbol: "AAPL", name: "Apple Inc", exchange: "NASDAQ", amountKrw: 1_000_000 },
-  { symbol: "016360", name: "Samsung Securities Co Ltd", exchange: "KRX", amountKrw: 100_000 }
+  { symbol: "SCHD", name: "Schwab U.S. Dividend Equity ETF", exchange: "NYSE", shares: 10, avgPriceUsd: 75 },
+  { symbol: "KO", name: "Coca-Cola Co", exchange: "NYSE", shares: 8, avgPriceUsd: 58 }
 ];
 
 export function createDraftRow(entry?: Partial<WatchlistEntry>): DraftRow {
@@ -19,12 +20,30 @@ export function createDraftRow(entry?: Partial<WatchlistEntry>): DraftRow {
     symbol: entry?.symbol ?? "",
     name: entry?.name ?? "",
     exchange: entry?.exchange ?? "",
-    amountKrw: entry?.amountKrw ? String(entry.amountKrw) : ""
+    shares: entry?.shares ? String(entry.shares) : "",
+    avgPriceUsd: entry?.avgPriceUsd ? String(entry.avgPriceUsd) : "",
+    note: entry?.note ?? ""
   };
 }
 
-export function normalizeAmount(input: string) {
+export function normalizeNumericInput(input: string) {
   return input.replace(/[^\d.]/g, "");
+}
+
+function parseLegacyHolding(entry: Record<string, unknown>): WatchlistEntry | null {
+  const symbol = typeof entry.symbol === "string" ? entry.symbol.trim().toUpperCase() : "";
+  if (!symbol) {
+    return null;
+  }
+
+  return {
+    symbol,
+    name: typeof entry.name === "string" && entry.name.trim() ? entry.name.trim() : symbol,
+    exchange: typeof entry.exchange === "string" ? entry.exchange.trim() : "",
+    shares: typeof entry.shares === "number" ? entry.shares : 0,
+    avgPriceUsd: typeof entry.avgPriceUsd === "number" ? entry.avgPriceUsd : 0,
+    note: typeof entry.note === "string" ? entry.note : ""
+  };
 }
 
 export function parseWatchlist(input: unknown): WatchlistEntry[] {
@@ -32,30 +51,21 @@ export function parseWatchlist(input: unknown): WatchlistEntry[] {
     return [];
   }
 
-  const parsed: WatchlistEntry[] = [];
+  return input
+    .map((entry) => {
+      if (!entry || typeof entry !== "object") {
+        return null;
+      }
 
-  input.forEach((entry) => {
-    if (!entry || typeof entry !== "object") {
-      return;
-    }
+      const row = entry as Record<string, unknown>;
+      const legacy = parseLegacyHolding(row);
+      if (!legacy) {
+        return null;
+      }
 
-    const row = entry as Partial<WatchlistEntry>;
-    const symbol = row.symbol?.trim().toUpperCase();
-    const amountKrw = Number(row.amountKrw);
-
-    if (!symbol || !Number.isFinite(amountKrw) || amountKrw <= 0) {
-      return;
-    }
-
-    parsed.push({
-      symbol,
-      name: row.name?.trim() || symbol,
-      exchange: row.exchange?.trim() || "",
-      amountKrw
-    });
-  });
-
-  return parsed;
+      return legacy;
+    })
+    .filter((entry): entry is WatchlistEntry => Boolean(entry));
 }
 
 export function parseDraftRows(rows: DraftRow[]): WatchlistEntry[] {
@@ -64,16 +74,19 @@ export function parseDraftRows(rows: DraftRow[]): WatchlistEntry[] {
       symbol: row.symbol.trim().toUpperCase(),
       name: row.name.trim() || row.symbol.trim().toUpperCase(),
       exchange: row.exchange.trim(),
-      amountKrw: Number(normalizeAmount(row.amountKrw))
+      shares: Number(normalizeNumericInput(row.shares)),
+      avgPriceUsd: Number(normalizeNumericInput(row.avgPriceUsd)),
+      note: row.note.trim()
     }))
-    .filter((row) => row.symbol && Number.isFinite(row.amountKrw) && row.amountKrw > 0)
+    .filter((row) => row.symbol && Number.isFinite(row.shares) && row.shares > 0)
     .reduce<Map<string, WatchlistEntry>>((map, row) => {
-      const existing = map.get(row.symbol);
       map.set(row.symbol, {
         symbol: row.symbol,
         name: row.name,
-        exchange: row.exchange || existing?.exchange || "",
-        amountKrw: (existing?.amountKrw ?? 0) + row.amountKrw
+        exchange: row.exchange,
+        shares: row.shares,
+        avgPriceUsd: Number.isFinite(row.avgPriceUsd) && row.avgPriceUsd > 0 ? row.avgPriceUsd : 0,
+        note: row.note
       });
       return map;
     }, new Map());
@@ -83,17 +96,6 @@ export function parseDraftRows(rows: DraftRow[]): WatchlistEntry[] {
 
 export function buildDraftRows(entries: WatchlistEntry[]) {
   return entries.length ? entries.map((entry) => createDraftRow(entry)) : [createDraftRow()];
-}
-
-export function sameWatchlistBySymbolAndAmount(left: WatchlistEntry[], right: WatchlistEntry[]) {
-  if (left.length !== right.length) {
-    return false;
-  }
-
-  return left.every(
-    (entry, index) =>
-      entry.symbol === right[index]?.symbol && entry.amountKrw === right[index]?.amountKrw
-  );
 }
 
 export function loadPersistedWatchlist() {
@@ -114,18 +116,9 @@ export function loadPersistedWatchlist() {
       return DEFAULT_WATCHLIST;
     }
 
-    const nextWatchlist = sameWatchlistBySymbolAndAmount(parsed, [
-      { symbol: "AAPL", name: "AAPL", amountKrw: 1_000_000 }
-    ])
-      ? DEFAULT_WATCHLIST
-      : parsed.map((entry) => ({
-          ...entry,
-          name: entry.name || entry.symbol
-        }));
-
-    window.localStorage.setItem(STORAGE_KEY, JSON.stringify(nextWatchlist));
+    window.localStorage.setItem(STORAGE_KEY, JSON.stringify(parsed));
     LEGACY_STORAGE_KEYS.forEach((key) => window.localStorage.removeItem(key));
-    return nextWatchlist;
+    return parsed;
   } catch {
     window.localStorage.removeItem(STORAGE_KEY);
     window.localStorage.setItem(STORAGE_KEY, JSON.stringify(DEFAULT_WATCHLIST));

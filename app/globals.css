@@ -39,19 +39,13 @@ html {
 body {
   margin: 0;
   min-height: 100vh;
-  background:
-    radial-gradient(circle at top left, rgba(15, 118, 110, 0.18), transparent 28%),
-    radial-gradient(circle at top right, rgba(20, 33, 61, 0.16), transparent 30%),
-    linear-gradient(180deg, #f8f4ec 0%, var(--bg) 100%);
+  background: linear-gradient(180deg, #f7f4ee 0%, var(--bg) 100%);
   color: var(--text);
   font-family: "Avenir Next", "Pretendard Variable", "SUIT Variable", "Noto Sans KR", sans-serif;
 }
 
 [data-theme="dark"] body {
-  background:
-    radial-gradient(circle at top left, rgba(93, 183, 167, 0.13), transparent 24%),
-    radial-gradient(circle at top right, rgba(89, 109, 147, 0.14), transparent 28%),
-    linear-gradient(180deg, #151b24 0%, var(--bg) 100%);
+  background: linear-gradient(180deg, #171d25 0%, var(--bg) 100%);
 }
 
 a {
@@ -68,6 +62,392 @@ textarea {
   width: min(1240px, calc(100vw - 32px));
   margin: 0 auto;
   padding: 40px 0 56px;
+}
+
+.note-shell {
+  width: min(1320px, calc(100vw - 32px));
+  margin: 0 auto;
+  padding: 34px 0 56px;
+}
+
+.note-topbar {
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-end;
+  gap: 16px;
+  margin-bottom: 18px;
+}
+
+.note-topbar-copy {
+  display: grid;
+  gap: 6px;
+}
+
+.note-topbar-copy h1 {
+  margin: 0;
+  font-size: clamp(2rem, 4vw, 3.1rem);
+  letter-spacing: -0.05em;
+  line-height: 0.98;
+}
+
+.note-topbar-copy p {
+  margin: 0;
+  max-width: 720px;
+  color: var(--muted);
+  line-height: 1.6;
+}
+
+.note-kicker {
+  color: var(--muted);
+  font-size: 0.86rem;
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+}
+
+.note-actions {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  flex-wrap: wrap;
+}
+
+.note-summary-grid {
+  display: grid;
+  grid-template-columns: repeat(6, minmax(0, 1fr));
+  gap: 12px;
+  margin-bottom: 16px;
+}
+
+.note-card {
+  background: var(--panel);
+  border: 1px solid rgba(20, 33, 61, 0.08);
+  border-radius: 22px;
+  box-shadow: var(--shadow);
+  backdrop-filter: blur(12px);
+}
+
+[data-theme="dark"] .note-card {
+  border-color: rgba(151, 166, 187, 0.12);
+}
+
+.note-stat {
+  padding: 16px;
+  display: grid;
+  gap: 8px;
+}
+
+.note-stat span {
+  color: var(--muted);
+  font-size: 0.86rem;
+}
+
+.note-stat strong {
+  font-size: 1.18rem;
+  letter-spacing: -0.03em;
+}
+
+.note-grid {
+  display: grid;
+  grid-template-columns: minmax(0, 1.45fr) minmax(340px, 0.95fr);
+  gap: 16px;
+  align-items: start;
+}
+
+.note-grid--bottom {
+  margin-top: 16px;
+}
+
+.note-table-card,
+.note-detail,
+.editor-board,
+.editor-help {
+  padding: 18px;
+}
+
+.section-head {
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-start;
+  gap: 14px;
+  margin-bottom: 14px;
+}
+
+.section-head h2,
+.section-head h3 {
+  margin: 0;
+  font-size: 1rem;
+  letter-spacing: -0.02em;
+}
+
+.section-head p {
+  margin: 4px 0 0;
+  color: var(--muted);
+  font-size: 0.88rem;
+  line-height: 1.5;
+}
+
+.section-head.compact {
+  margin-bottom: 10px;
+}
+
+.timestamp-strip {
+  display: flex;
+  justify-content: space-between;
+  gap: 12px;
+  flex-wrap: wrap;
+  padding: 10px 12px;
+  margin-bottom: 12px;
+  border-radius: 16px;
+  background: rgba(20, 33, 61, 0.04);
+  color: var(--muted);
+  font-size: 0.85rem;
+}
+
+[data-theme="dark"] .timestamp-strip {
+  background: rgba(255, 255, 255, 0.03);
+}
+
+.table-wrap {
+  overflow-x: auto;
+}
+
+.note-table,
+.note-mini-table {
+  width: 100%;
+  border-collapse: collapse;
+}
+
+.note-table th,
+.note-table td,
+.note-mini-table th,
+.note-mini-table td {
+  padding: 12px 10px;
+  border-bottom: 1px solid rgba(20, 33, 61, 0.08);
+  text-align: left;
+  vertical-align: top;
+}
+
+.note-table th,
+.note-mini-table th {
+  color: var(--muted);
+  font-weight: 500;
+  font-size: 0.84rem;
+}
+
+.note-table td strong,
+.note-mini-table td strong {
+  display: block;
+  font-weight: 600;
+}
+
+.note-table td span {
+  display: block;
+  color: var(--muted);
+  font-size: 0.82rem;
+  margin-top: 4px;
+}
+
+.note-table tr,
+.note-mini-table tr {
+  transition: background 0.18s ease;
+}
+
+.note-table tbody tr:hover,
+.note-mini-table tbody tr:hover {
+  background: rgba(20, 33, 61, 0.03);
+}
+
+.note-table tbody tr.active-row {
+  background: rgba(15, 118, 110, 0.08);
+}
+
+.note-table tbody tr.active-row td {
+  border-bottom-color: rgba(15, 118, 110, 0.16);
+}
+
+.note-table tbody tr,
+.note-mini-table tbody tr {
+  cursor: pointer;
+}
+
+.note-detail {
+  display: grid;
+  gap: 14px;
+}
+
+.detail-hero {
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-start;
+  gap: 16px;
+  padding: 14px;
+  border-radius: 18px;
+  background: rgba(20, 33, 61, 0.04);
+}
+
+[data-theme="dark"] .detail-hero {
+  background: rgba(255, 255, 255, 0.03);
+}
+
+.detail-hero strong {
+  display: block;
+  font-size: 1.03rem;
+  margin-bottom: 4px;
+}
+
+.detail-hero span {
+  color: var(--muted);
+  font-size: 0.84rem;
+}
+
+.detail-price {
+  text-align: right;
+}
+
+.detail-price strong {
+  display: block;
+  font-size: 1.55rem;
+  letter-spacing: -0.04em;
+  line-height: 1;
+}
+
+.detail-price span {
+  display: inline-flex;
+  margin-top: 6px;
+  padding: 6px 10px;
+  border-radius: 999px;
+  font-size: 0.84rem;
+  font-weight: 600;
+}
+
+.detail-metrics {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 10px;
+}
+
+.detail-metrics div {
+  display: grid;
+  gap: 5px;
+  padding: 12px 13px;
+  border-radius: 16px;
+  background: rgba(20, 33, 61, 0.04);
+}
+
+[data-theme="dark"] .detail-metrics div {
+  background: rgba(255, 255, 255, 0.03);
+}
+
+.detail-metrics span {
+  color: var(--muted);
+  font-size: 0.82rem;
+}
+
+.detail-metrics strong {
+  font-size: 0.98rem;
+}
+
+.detail-note {
+  display: grid;
+  gap: 8px;
+  padding: 14px;
+  border-radius: 18px;
+  background: rgba(20, 33, 61, 0.03);
+}
+
+[data-theme="dark"] .detail-note {
+  background: rgba(255, 255, 255, 0.03);
+}
+
+.detail-note span {
+  color: var(--muted);
+  font-size: 0.82rem;
+}
+
+.detail-note p {
+  margin: 0;
+  line-height: 1.6;
+}
+
+.chart-card {
+  display: grid;
+  gap: 12px;
+}
+
+.mini-table-block {
+  display: grid;
+  gap: 12px;
+}
+
+.note-empty {
+  margin-top: 8px;
+}
+
+.compact-table td,
+.compact-table th {
+  padding-top: 10px;
+  padding-bottom: 10px;
+}
+
+.editor-grid {
+  grid-template-columns: minmax(0, 1.45fr) minmax(300px, 0.8fr);
+}
+
+.editor-board {
+  display: grid;
+  gap: 14px;
+}
+
+.editor-help {
+  display: grid;
+  gap: 12px;
+}
+
+.editor-help-list {
+  display: grid;
+  gap: 12px;
+}
+
+.editor-help-item {
+  display: grid;
+  gap: 6px;
+  padding: 14px;
+  border-radius: 16px;
+  background: rgba(20, 33, 61, 0.04);
+  border: 1px solid rgba(20, 33, 61, 0.08);
+}
+
+[data-theme="dark"] .editor-help-item {
+  background: rgba(255, 255, 255, 0.03);
+  border-color: rgba(151, 166, 187, 0.12);
+}
+
+.editor-help-item span {
+  color: var(--muted);
+  font-size: 0.88rem;
+  line-height: 1.55;
+}
+
+.editor-message {
+  margin-top: 4px;
+}
+
+.note-shell .ghost-btn,
+.note-shell .primary-btn {
+  border-radius: 14px;
+}
+
+.note-shell .ghost-btn {
+  background: rgba(255, 255, 255, 0.65);
+}
+
+[data-theme="dark"] .note-shell .ghost-btn {
+  background: rgba(255, 255, 255, 0.04);
+}
+
+.note-shell .primary-btn {
+  background: var(--text);
+  color: white;
 }
 
 .shell-topbar {
@@ -709,6 +1089,15 @@ textarea {
     grid-template-columns: 1fr;
   }
 
+  .note-summary-grid {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  .note-grid,
+  .editor-grid {
+    grid-template-columns: 1fr;
+  }
+
   .sidebar {
     position: static;
   }
@@ -728,7 +1117,17 @@ textarea {
     padding: 20px 0 36px;
   }
 
+  .note-shell {
+    width: min(100vw - 20px, 1320px);
+    padding: 20px 0 36px;
+  }
+
   .shell-topbar {
+    align-items: start;
+    flex-direction: column;
+  }
+
+  .note-topbar {
     align-items: start;
     flex-direction: column;
   }
@@ -737,7 +1136,27 @@ textarea {
     width: 100%;
   }
 
+  .note-actions {
+    width: 100%;
+  }
+
   .hero-card {
+    grid-template-columns: 1fr;
+  }
+
+  .note-summary-grid {
+    grid-template-columns: 1fr;
+  }
+
+  .detail-hero {
+    flex-direction: column;
+  }
+
+  .detail-price {
+    text-align: left;
+  }
+
+  .detail-metrics {
     grid-template-columns: 1fr;
   }
 

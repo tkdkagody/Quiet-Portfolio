@@ -24,7 +24,7 @@ export function StockChart({ data, positive }: StockChartProps) {
   if (data.length < 2) {
     return (
       <div className="empty">
-        차트를 그리기 위한 데이터가 부족합니다. 다른 종목을 선택하거나 조금 뒤에 다시 새로고침해 보세요.
+        값이 없습니다.
       </div>
     );
   }
@@ -32,14 +32,14 @@ export function StockChart({ data, positive }: StockChartProps) {
   const width = 880;
   const height = 320;
   const padding = 26;
-  const closes = data.map((point) => point.close);
+  const closes = data.map((point) => point.price);
   const min = Math.min(...closes);
   const max = Math.max(...closes);
   const range = max - min || 1;
 
   const points = data.map((point, index) => {
     const x = padding + (index / (data.length - 1)) * (width - padding * 2);
-    const y = height - padding - ((point.close - min) / range) * (height - padding * 2);
+    const y = height - padding - ((point.price - min) / range) * (height - padding * 2);
     return { x, y };
   });
 
@@ -86,10 +86,10 @@ export function StockChart({ data, positive }: StockChartProps) {
         </svg>
       </div>
       <div className="chart-metrics">
-        <span>{formatLabel(data[0].datetime)}</span>
+        <span>{formatLabel(data[0].date)}</span>
         <span>저점 {min.toFixed(2)}</span>
         <span>고점 {max.toFixed(2)}</span>
-        <span>{formatLabel(data[data.length - 1].datetime)}</span>
+        <span>{formatLabel(data[data.length - 1].date)}</span>
       </div>
     </>
   );

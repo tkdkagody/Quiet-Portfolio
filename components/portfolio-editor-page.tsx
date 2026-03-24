@@ -47,12 +47,12 @@ export function PortfolioEditorPage() {
 
     const parsed = parseDraftRows(draftRows);
     if (!parsed.length) {
-      setMessage("최소 1개 이상의 종목과 금액을 입력해 주세요.");
+      setMessage("최소 1개 이상의 종목과 보유수량을 입력해 주세요.");
       return false;
     }
 
     window.localStorage.setItem(STORAGE_KEY, JSON.stringify(parsed));
-    setMessage("보유 종목이 저장되었습니다. 대시보드에서 바로 반영됩니다.");
+    setMessage("저장했습니다. 대시보드에서 바로 확인할 수 있습니다.");
     return true;
   }
 
@@ -71,36 +71,32 @@ export function PortfolioEditorPage() {
   }
 
   return (
-    <main className="shell">
-      <section className="shell-topbar">
-        <div className="shell-topbar-copy">
-          <strong>Deskfolio</strong>
-          <span>보유 종목과 금액을 정리해서 저장하는 입력 전용 화면</span>
+    <main className="note-shell">
+      <section className="note-topbar">
+        <div className="note-topbar-copy">
+          <span className="note-kicker">Deskfolio</span>
+          <h1>배당 종목 입력</h1>
+          <p>종목명 검색 후 선택하고, 보유수량과 평균매수가를 적어서 노트처럼 저장합니다.</p>
         </div>
-        <div className="page-actions">
+        <div className="note-actions">
           <Link className="ghost-btn" href="/">
-            대시보드로 돌아가기
+            대시보드
           </Link>
-          <button
-            className="ghost-btn"
-            type="button"
-            onClick={toggleTheme}
-          >
+          <button className="ghost-btn" type="button" onClick={toggleTheme}>
             {theme === "dark" ? "주간모드" : "야간모드"}
           </button>
         </div>
       </section>
 
-      <section className="editor-layout">
-        <section className="panel editor-page-panel">
-          <div className="panel-title">
-            <h2>미주 보유 종목 입력</h2>
-            <span className="subtle">{draftRows.length}개 행</span>
+      <section className="note-grid editor-grid">
+        <article className="note-card editor-board">
+          <div className="section-head">
+            <div>
+              <h2>미주 보유 종목</h2>
+              <p>검색 결과에서 종목을 선택한 뒤 수량과 평단을 적어주세요.</p>
+            </div>
+            <span className="subtle">{draftRows.length}행</span>
           </div>
-          <p className="hint">
-            종목명으로 검색한 뒤 결과를 선택하고, 투자금액을 넣어 저장합니다. 이 페이지는 입력만
-            담당하고 실제 확인은 대시보드에서 합니다.
-          </p>
 
           <div className="editor-list">
             {draftRows.map((row, index) => (
@@ -126,29 +122,37 @@ export function PortfolioEditorPage() {
               행 추가
             </button>
             <button className="ghost-btn" type="button" onClick={handleReset}>
-              예시 종목 복원
+              예시 복원
             </button>
           </div>
 
-          {message ? <div className="loading-box" style={{ marginTop: 14 }}>{message}</div> : null}
-        </section>
+          {message ? <div className="loading-box editor-message">{message}</div> : null}
+        </article>
 
-        <aside className="panel editor-help-panel">
-          <div className="panel-title">
-            <h3>입력 팁</h3>
+        <aside className="note-card editor-help">
+          <div className="section-head">
+            <div>
+              <h2>입력 팁</h2>
+              <p>메모는 대시보드의 종목별 상세에도 같이 표시됩니다.</p>
+            </div>
           </div>
+
           <div className="editor-help-list">
             <div className="editor-help-item">
-              <strong>1. 종목명으로 검색</strong>
-              <span>예: Apple, SCHD, Tesla, Nvidia</span>
+              <strong>1. 종목 검색</strong>
+              <span>Apple, SCHD, Coca-Cola 같이 이름이나 티커를 입력합니다.</span>
             </div>
             <div className="editor-help-item">
-              <strong>2. 검색 결과에서 확정</strong>
-              <span>이름만 입력하면 저장되지 않습니다. 목록에서 눌러야 심볼이 확정됩니다.</span>
+              <strong>2. 결과 선택</strong>
+              <span>목록에서 눌러야 심볼이 확정됩니다. 입력만 하면 저장되지 않습니다.</span>
             </div>
             <div className="editor-help-item">
-              <strong>3. 투자금액 입력</strong>
-              <span>원화 기준 금액을 넣으면 대시보드에서 추정 수량과 환산 가격을 같이 보여줍니다.</span>
+              <strong>3. 수량과 평단</strong>
+              <span>보유수량과 평균매수가를 넣으면 예상 배당과 손익을 바로 계산합니다.</span>
+            </div>
+            <div className="editor-help-item">
+              <strong>4. 메모</strong>
+              <span>배당주 목적, 매수 이유, 리밸런싱 기준을 짧게 적어두면 나중에 보기 쉽습니다.</span>
             </div>
           </div>
         </aside>

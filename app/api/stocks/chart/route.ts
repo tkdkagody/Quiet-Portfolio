@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
-import { loadStockChart } from "@/lib/twelve-data";
+import { loadStockChart } from "@/lib/polygon";
 import { StockChartResponse } from "@/lib/types";
 
 export const dynamic = "force-dynamic";
@@ -19,13 +19,17 @@ export async function GET(request: NextRequest) {
       asOf: new Date().toISOString()
     };
 
+    if (!series.length) {
+      payload.message = "차트: 값이 없습니다";
+    }
+
     return NextResponse.json(payload);
   } catch (error) {
-    return NextResponse.json(
-      {
-        message: error instanceof Error ? error.message : "차트 데이터를 가져오지 못했습니다."
-      },
-      { status: 500 }
-    );
+    return NextResponse.json({
+      symbol,
+      series: [],
+      asOf: new Date().toISOString(),
+      message: error instanceof Error ? `차트: ${error.message}` : "차트: 값이 없습니다"
+    });
   }
 }

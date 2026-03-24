@@ -4,34 +4,34 @@ import Link from "next/link";
 import { useEffect, useMemo, useState } from "react";
 import { StockChart } from "@/components/stock-chart";
 import { useTheme } from "@/components/theme-provider";
-import {
-  StockChartResponse,
-  StocksApiResponse,
-  StockSeriesPoint,
-  StockSnapshot,
-  WatchlistEntry
-} from "@/lib/types";
-import {
-  DEFAULT_WATCHLIST,
-  loadPersistedWatchlist
-} from "@/lib/portfolio";
+import { loadPersistedWatchlist } from "@/lib/portfolio";
+import { PortfolioSnapshot, StockSeriesPoint, WatchlistEntry } from "@/lib/types";
 
-function formatMoney(value: number, currency = "USD") {
-  return new Intl.NumberFormat("ko-KR", {
+function formatUSD(value: number) {
+  return new Intl.NumberFormat("en-US", {
     style: "currency",
-    currency,
-    maximumFractionDigits: currency === "KRW" || value >= 1000 ? 0 : 2
+    currency: "USD",
+    maximumFractionDigits: value >= 1000 ? 0 : 2
   }).format(value);
 }
 
-function formatNumber(value: number, digits = 0) {
-  return new Intl.NumberFormat("ko-KR", {
-    maximumFractionDigits: digits,
-    minimumFractionDigits: digits
-  }).format(value);
+function formatUSDOrEmpty(value: number, missing = false) {
+  if (missing) {
+    return "값이 없습니다";
+  }
+
+  return formatUSD(value);
 }
 
-function formatPreciseTime(value: string | null) {
+function formatPercentOrEmpty(value: number, missing = false) {
+  if (missing) {
+    return "값이 없습니다";
+  }
+
+  return `${value.toFixed(2)}%`;
+}
+
+function formatDateTime(value: string | null) {
   if (!value) {
     return "-";
   }
@@ -42,6 +42,8 @@ function formatPreciseTime(value: string | null) {
   }
 
   return new Intl.DateTimeFormat("ko-KR", {
+    month: "short",
+    day: "numeric",
     hour: "2-digit",
     minute: "2-digit",
     second: "2-digit"
@@ -66,30 +68,39 @@ function formatRelativeTime(value: string | null, nowMs: number) {
   return `${Math.floor(diffMinutes / 60)}시간 전`;
 }
 
-function joinSymbols(entries: WatchlistEntry[]) {
-  return entries.map((entry) => entry.symbol).join(",");
-}
-
-function estimateUnits(amountKrw: number, priceKrw: number) {
-  if (amountKrw <= 0 || priceKrw <= 0) {
-    return 0;
+function formatDate(value: string | null) {
+  if (!value) {
+    return "-";
   }
 
-  return amountKrw / priceKrw;
+  const date = new Date(value);
+  if (Number.isNaN(date.getTime())) {
+    return value;
+  }
+
+  return new Intl.DateTimeFormat("ko-KR", {
+    year: "numeric",
+    month: "short",
+    day: "numeric"
+  }).format(date);
+}
+
+function formatChange(value: number) {
+  const sign = value > 0 ? "+" : "";
+  return `${sign}${formatUSD(value)}`;
 }
 
 export function PortfolioDashboard() {
   const { theme, toggleTheme } = useTheme();
-  const [watchlist, setWatchlist] = useState<WatchlistEntry[]>(DEFAULT_WATCHLIST);
-  const [selectedSymbol, setSelectedSymbol] = useState(DEFAULT_WATCHLIST[0].symbol);
-  const [items, setItems] = useState<StockSnapshot[]>([]);
+  const [watchlist, setWatchlist] = useState<WatchlistEntry[]>([]);
+  const [portfolio, setPortfolio] = useState<PortfolioSnapshot | null>(null);
+  const [selectedSymbol, setSelectedSymbol] = useState<string>("");
   const [chartCache, setChartCache] = useState<Record<string, StockSeriesPoint[]>>({});
-  const [errors, setErrors] = useState<StocksApiResponse["errors"]>([]);
   const [loading, setLoading] = useState(true);
   const [chartLoading, setChartLoading] = useState(false);
   const [message, setMessage] = useState<string | null>(null);
   const [chartMessage, setChartMessage] = useState<string | null>(null);
-  const [updatedAt, setUpdatedAt] = useState<string | null>(null);
+  const [portfolioUpdatedAt, setPortfolioUpdatedAt] = useState<string | null>(null);
   const [chartUpdatedAt, setChartUpdatedAt] = useState<string | null>(null);
   const [refreshNonce, setRefreshNonce] = useState(0);
   const [nowMs, setNowMs] = useState(Date.now());
@@ -97,20 +108,7 @@ export function PortfolioDashboard() {
   useEffect(() => {
     const nextWatchlist = loadPersistedWatchlist();
     setWatchlist(nextWatchlist);
-    setSelectedSymbol(nextWatchlist[0].symbol);
-  }, []);
-
-  useEffect(() => {
-    function syncNow() {
-      setNowMs(Date.now());
-    }
-
-    syncNow();
-    const timer = window.setInterval(syncNow, 1000);
-
-    return () => {
-      window.clearInterval(timer);
-    };
+    setSelectedSymbol(nextWatchlist[0]?.symbol ?? "");
   }, []);
 
   useEffect(() => {
@@ -132,55 +130,55 @@ export function PortfolioDashboard() {
   }, []);
 
   useEffect(() => {
+    const timer = window.setInterval(() => setNowMs(Date.now()), 1000);
+    return () => window.clearInterval(timer);
+  }, []);
+
+  useEffect(() => {
     if (!watchlist.length) {
-      setItems([]);
-      setChartCache({});
-      setErrors([]);
+      setPortfolio(null);
       setLoading(false);
       return;
     }
 
     const controller = new AbortController();
 
-    async function fetchStocks() {
+    async function fetchPortfolio() {
       setLoading(true);
       setMessage(null);
 
       try {
-        const response = await fetch(`/api/stocks?symbols=${joinSymbols(watchlist)}`, {
+        const response = await fetch("/api/portfolio", {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json"
+          },
+          body: JSON.stringify({ holdings: watchlist }),
           signal: controller.signal,
           cache: "no-store"
         });
 
-        const payload = (await response.json()) as StocksApiResponse | { message: string };
+        const payload = (await response.json()) as PortfolioSnapshot | { message: string };
 
         if (!response.ok) {
-          throw new Error("message" in payload ? payload.message : "시세를 불러오지 못했습니다.");
+          throw new Error("message" in payload ? payload.message : "포트폴리오를 불러오지 못했습니다.");
         }
 
-        const nextPayload = payload as StocksApiResponse;
-        setItems(nextPayload.items);
-        setErrors(nextPayload.errors);
-        setUpdatedAt(nextPayload.asOf);
+        const nextPayload = payload as PortfolioSnapshot;
+        setPortfolio(nextPayload);
+        setPortfolioUpdatedAt(nextPayload.asOf);
         setChartCache({});
         setChartUpdatedAt(null);
-
-        if (nextPayload.items.length) {
-          setSelectedSymbol((current) =>
-            nextPayload.items.some((item) => item.symbol === current)
-              ? current
-              : nextPayload.items[0].symbol
-          );
-        }
+        setSelectedSymbol((current) =>
+          nextPayload.items.some((item) => item.quote.symbol === current)
+            ? current
+            : nextPayload.items[0]?.quote.symbol ?? ""
+        );
       } catch (error) {
-        if (controller.signal.aborted) {
-          return;
+        if (!controller.signal.aborted) {
+          setPortfolio(null);
+          setMessage(error instanceof Error ? error.message : "포트폴리오를 불러오지 못했습니다.");
         }
-
-        setItems([]);
-        setChartCache({});
-        setErrors([]);
-        setMessage(error instanceof Error ? error.message : "알 수 없는 오류가 발생했습니다.");
       } finally {
         if (!controller.signal.aborted) {
           setLoading(false);
@@ -188,7 +186,7 @@ export function PortfolioDashboard() {
       }
     }
 
-    fetchStocks();
+    fetchPortfolio();
 
     return () => {
       controller.abort();
@@ -196,12 +194,7 @@ export function PortfolioDashboard() {
   }, [refreshNonce, watchlist]);
 
   useEffect(() => {
-    if (!selectedSymbol) {
-      setChartMessage(null);
-      return;
-    }
-
-    if (chartCache[selectedSymbol]?.length) {
+    if (!selectedSymbol || chartCache[selectedSymbol]?.length) {
       return;
     }
 
@@ -216,24 +209,21 @@ export function PortfolioDashboard() {
           signal: controller.signal,
           cache: "no-store"
         });
-        const payload = (await response.json()) as StockChartResponse | { message: string };
+        const payload = (await response.json()) as { series: StockSeriesPoint[]; asOf: string; message?: string };
 
-        if (!response.ok) {
-          throw new Error("message" in payload ? payload.message : "차트 데이터를 불러오지 못했습니다.");
+        if (!response.ok || payload.message) {
+          throw new Error(payload.message ?? "차트 데이터를 불러오지 못했습니다.");
         }
 
-        const nextPayload = payload as StockChartResponse;
         setChartCache((current) => ({
           ...current,
-          [nextPayload.symbol]: nextPayload.series
+          [selectedSymbol]: payload.series
         }));
-        setChartUpdatedAt(nextPayload.asOf);
+        setChartUpdatedAt(payload.asOf);
       } catch (error) {
-        if (controller.signal.aborted) {
-          return;
+        if (!controller.signal.aborted) {
+          setChartMessage(error instanceof Error ? error.message : "차트 데이터를 불러오지 못했습니다.");
         }
-
-        setChartMessage(error instanceof Error ? error.message : "차트 데이터를 불러오지 못했습니다.");
       } finally {
         if (!controller.signal.aborted) {
           setChartLoading(false);
@@ -248,261 +238,355 @@ export function PortfolioDashboard() {
     };
   }, [chartCache, selectedSymbol]);
 
-  const stockMap = useMemo(() => new Map(items.map((item) => [item.symbol, item])), [items]);
-  const selectedStock = stockMap.get(selectedSymbol) ?? items[0];
-  const selectedEntry =
-    watchlist.find((entry) => entry.symbol === selectedStock?.symbol) ?? watchlist[0];
-  const selectedSeries = selectedStock ? chartCache[selectedStock.symbol] ?? [] : [];
+  const holdingMap = useMemo(
+    () => new Map(portfolio?.items.map((item) => [item.quote.symbol, item])),
+    [portfolio]
+  );
 
-  const holdingsSummary = useMemo(() => {
-    return watchlist
-      .map((entry) => {
-        const stock = stockMap.get(entry.symbol);
-        if (!stock) {
-          return null;
-        }
+  const selectedHolding = selectedSymbol ? holdingMap.get(selectedSymbol) : undefined;
+  const selectedSeries = selectedSymbol ? chartCache[selectedSymbol] ?? [] : [];
+  const totalPositions = portfolio?.items.length ?? 0;
+  const selectedGain = selectedHolding
+    ? selectedHolding.quote.priceUsd * selectedHolding.holding.shares -
+      selectedHolding.holding.avgPriceUsd * selectedHolding.holding.shares
+    : 0;
 
-        return {
-          ...entry,
-          stock,
-          estimatedUnits: estimateUnits(entry.amountKrw, stock.priceKrw)
-        };
-      })
-      .filter((item): item is NonNullable<typeof item> => Boolean(item));
-  }, [stockMap, watchlist]);
-
-  const totalBudget = holdingsSummary.reduce((sum, item) => sum + item.amountKrw, 0);
-  const selectedEstimatedUnits =
-    selectedEntry && selectedStock ? estimateUnits(selectedEntry.amountKrw, selectedStock.priceKrw) : 0;
+  const upcomingDividends = (portfolio?.items ?? [])
+    .map((item) => ({
+      symbol: item.quote.symbol,
+      name: item.quote.name,
+      nextExDate: item.nextExDate,
+      nextPaymentDate: item.nextPaymentDate,
+      monthlyDividend: item.monthlyDividend,
+      annualDividend: item.annualDividend,
+      yieldPercent: item.yieldPercent
+    }))
+    .sort((left, right) => {
+      const leftTime = left.nextPaymentDate ? new Date(left.nextPaymentDate).getTime() : Number.MAX_SAFE_INTEGER;
+      const rightTime = right.nextPaymentDate ? new Date(right.nextPaymentDate).getTime() : Number.MAX_SAFE_INTEGER;
+      return leftTime - rightTime;
+    });
 
   function handleRefresh() {
     setRefreshNonce((current) => current + 1);
   }
 
   return (
-    <main className="shell">
-      <section className="shell-topbar">
-        <div className="shell-topbar-copy">
-          <strong>Deskfolio</strong>
-          <span>야간모드와 조용한 대비로 오래 켜두기 쉬운 화면</span>
+    <main className="note-shell">
+      <section className="note-topbar">
+        <div className="note-topbar-copy">
+          <span className="note-kicker">Deskfolio</span>
+          <h1>배당 투자 노트</h1>
+          <p>보유 종목, 평단, 배당락일, 지급일, 예상 배당금을 메모처럼 정리합니다. 최근 종가를 기준으로 보여줍니다.</p>
         </div>
-        <button
-          className="ghost-btn"
-          type="button"
-          onClick={toggleTheme}
-        >
-          {theme === "dark" ? "주간모드" : "야간모드"}
-        </button>
+        <div className="note-actions">
+          <Link className="ghost-btn" href="/portfolio">
+            종목 입력
+          </Link>
+          <button className="ghost-btn" type="button" onClick={handleRefresh}>
+            새로고침
+          </button>
+          <button className="ghost-btn" type="button" onClick={toggleTheme}>
+            {theme === "dark" ? "주간모드" : "야간모드"}
+          </button>
+        </div>
       </section>
 
-      <section className="dashboard">
-        <aside className="panel sidebar">
-          <div className="panel-title">
-            <h2>보유 종목</h2>
-            <span className="subtle">{watchlist.length}개 추적 중</span>
-          </div>
-          <p className="hint">
-            메인 화면은 확인 전용입니다. 보유 종목과 금액 입력은 별도 페이지에서 정리한 뒤 여기서
-            전체 현황과 상세 차트를 확인합니다.
-          </p>
+      <section className="note-summary-grid">
+        <div className="note-card note-stat">
+          <span>총 매수원가</span>
+          <strong>{portfolio ? formatUSDOrEmpty(portfolio.totalCost, false) : "-"}</strong>
+        </div>
+        <div className="note-card note-stat">
+          <span>현재 평가금액</span>
+          <strong>{portfolio ? formatUSDOrEmpty(portfolio.totalValue, portfolio.totalValue === 0) : "-"}</strong>
+        </div>
+        <div className="note-card note-stat">
+          <span>총 평가손익</span>
+          <strong className={portfolio && portfolio.totalGain >= 0 ? "up" : "down"}>
+            {portfolio ? formatChange(portfolio.totalGain) : "-"}
+          </strong>
+        </div>
+        <div className="note-card note-stat">
+          <span>예상 월 배당</span>
+          <strong>{portfolio ? formatUSDOrEmpty(portfolio.totalMonthlyDividend, portfolio.totalMonthlyDividend === 0) : "-"}</strong>
+        </div>
+        <div className="note-card note-stat">
+          <span>예상 연 배당</span>
+          <strong>{portfolio ? formatUSDOrEmpty(portfolio.totalAnnualDividend, portfolio.totalAnnualDividend === 0) : "-"}</strong>
+        </div>
+        <div className="note-card note-stat">
+          <span>보유 종목 수</span>
+          <strong>{totalPositions}개</strong>
+        </div>
+      </section>
 
-          <div className="toolbar">
-            <Link className="primary-btn sidebar-link-btn" href="/portfolio">
-              종목 입력 페이지
-            </Link>
-            <button className="ghost-btn" type="button" onClick={handleRefresh}>
-              시세 새로고침
-            </button>
+      <section className="note-grid">
+        <article className="note-card note-table-card">
+          <div className="section-head">
+            <div>
+              <h2>보유 종목</h2>
+              <p>최근 종가와 예상 배당을 같이 적어두는 목록입니다.</p>
+            </div>
+            <span className="subtle">{totalPositions}개</span>
           </div>
 
-          <div className="timestamp-box">
-            <span>시세 마지막 갱신</span>
-            <strong>{formatPreciseTime(updatedAt)}</strong>
-            <small>{formatRelativeTime(updatedAt, nowMs)}</small>
-          </div>
-          <div className="timestamp-box">
-            <span>차트 마지막 갱신</span>
-            <strong>{formatPreciseTime(chartUpdatedAt)}</strong>
-            <small>{formatRelativeTime(chartUpdatedAt, nowMs)}</small>
+          <div className="timestamp-strip">
+            <span>
+              포트폴리오 갱신 {formatDateTime(portfolioUpdatedAt)} · {formatRelativeTime(portfolioUpdatedAt, nowMs)}
+            </span>
+            <span>
+              차트 갱신 {formatDateTime(chartUpdatedAt)} · {formatRelativeTime(chartUpdatedAt, nowMs)}
+            </span>
           </div>
 
-          <div className="snapshot-list">
-            {holdingsSummary.map((item) => {
-              const isActive = item.symbol === selectedStock?.symbol;
-              const direction = item.stock.change >= 0 ? "up" : "down";
-
-              return (
-                <button
-                  key={item.symbol}
-                  type="button"
-                  className={`stock-row${isActive ? " active" : ""}`}
-                  onClick={() => setSelectedSymbol(item.symbol)}
-                >
-                  <div className="stock-row-head">
-                    <strong>{item.name}</strong>
-                    <span>{formatMoney(item.stock.priceKrw, "KRW")}</span>
-                  </div>
-                  <div className="stock-row-tail">
-                    <span>{formatMoney(item.amountKrw, "KRW")}</span>
-                    <span className={direction}>{item.stock.percentChange.toFixed(2)}%</span>
-                  </div>
-                </button>
-              );
-            })}
-          </div>
-        </aside>
-
-        <div className="main">
           {message ? <div className="error-box">{message}</div> : null}
-          <div className="subtle" style={{ marginTop: -8 }}>
-            목록은 수동 새로고침 또는 저장 후 반영되고, 차트는 선택한 종목만 별도로 불러옵니다.
-          </div>
-          {errors.length > 0 ? (
-            <div className="error-box">
-              {errors.map((error) => `${error.symbol}: ${error.message}`).join(" / ")}
+          {portfolio?.warnings?.length ? (
+            <div className="loading-box">
+              {portfolio.warnings.map((warning) => (
+                <div key={warning}>{warning}</div>
+              ))}
             </div>
           ) : null}
-          {loading ? <div className="loading-box">현재 시세와 환율을 불러오는 중입니다...</div> : null}
-          {!loading && !selectedStock ? (
-            <div className="empty">왼쪽에서 종목명을 검색해서 선택한 뒤 `종목 적용`을 눌러 주세요.</div>
+          {loading ? <div className="loading-box">포트폴리오를 불러오는 중입니다...</div> : null}
+          {!loading && !portfolio ? (
+            <div className="empty note-empty">입력 페이지에서 종목을 저장하면 여기로 불러옵니다.</div>
           ) : null}
 
-          {holdingsSummary.length > 0 ? (
-            <section className="overview-grid">
-              {holdingsSummary.map((item) => (
-                <button
-                  key={item.symbol}
-                  type="button"
-                  className={`panel overview-card${item.symbol === selectedStock?.symbol ? " active" : ""}`}
-                  onClick={() => setSelectedSymbol(item.symbol)}
-                >
-                  <div className="overview-card-head">
-                    <div>
-                      <strong>{item.name}</strong>
-                      <span>{item.symbol}</span>
-                    </div>
-                    <span className={item.stock.change >= 0 ? "change-pill up" : "change-pill down"}>
-                      {item.stock.percentChange.toFixed(2)}%
-                    </span>
-                  </div>
-                  <div className="overview-price">{formatMoney(item.stock.priceKrw, "KRW")}</div>
-                  <div className="overview-metrics">
-                    <span>입력 금액 {formatMoney(item.amountKrw, "KRW")}</span>
-                    <span>현재가 {formatMoney(item.stock.price, item.stock.currency)}</span>
-                    <span>추정 수량 {formatNumber(item.estimatedUnits, 4)}주</span>
-                  </div>
-                </button>
-              ))}
-            </section>
-          ) : null}
+          {portfolio ? (
+            <div className="table-wrap">
+              <table className="note-table">
+                <thead>
+                  <tr>
+                    <th>종목</th>
+                    <th>보유</th>
+                    <th>평단</th>
+                    <th>최근 종가</th>
+                    <th>손익</th>
+                    <th>월 배당</th>
+                    <th>배당락일</th>
+                    <th>메모</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {portfolio.items.map((item) => {
+                    const isActive = item.quote.symbol === selectedSymbol;
+                    const gain = item.quote.priceUsd * item.holding.shares - item.holding.avgPriceUsd * item.holding.shares;
 
-          {selectedStock && selectedEntry ? (
+                    return (
+                      <tr
+                        key={item.quote.symbol}
+                        className={isActive ? "active-row" : ""}
+                        onClick={() => setSelectedSymbol(item.quote.symbol)}
+                      >
+                        <td>
+                          <strong>{item.quote.name}</strong>
+                          <span>{item.quote.symbol}</span>
+                        </td>
+                        <td>{item.holding.shares}주</td>
+                        <td>{formatUSDOrEmpty(item.holding.avgPriceUsd, item.holding.avgPriceUsd === 0)}</td>
+                        <td>{formatUSDOrEmpty(item.quote.priceUsd, item.dataStatus?.price === "missing")}</td>
+                        <td className={gain >= 0 ? "up" : "down"}>
+                          {formatUSDOrEmpty(gain, item.dataStatus?.price === "missing")}
+                        </td>
+                        <td>{formatUSDOrEmpty(item.monthlyDividend, item.dataStatus?.dividends === "missing")}</td>
+                        <td>{formatDate(item.nextExDate)}</td>
+                        <td>{item.holding.note || "-"}</td>
+                      </tr>
+                    );
+                  })}
+                </tbody>
+              </table>
+            </div>
+          ) : null}
+        </article>
+
+        <aside className="note-card note-detail">
+          <div className="section-head">
+            <div>
+              <h2>선택 종목</h2>
+              <p>세부 수치와 차트, 최근 배당 내역을 표시합니다.</p>
+            </div>
+            <span className="subtle">{selectedHolding ? selectedHolding.quote.symbol : "-"}</span>
+          </div>
+
+          {selectedHolding ? (
             <>
-              <section className="panel hero-card">
+              <div className="detail-hero">
                 <div>
-                  <div className="ticker-line">
-                    <span className="ticker-pill">{selectedStock.exchange || selectedEntry.exchange || "Market"}</span>
-                    <span className="subtle">
-                      최근 갱신 {formatPreciseTime(selectedStock.lastUpdated)} · {formatRelativeTime(selectedStock.lastUpdated, nowMs)}
-                    </span>
-                  </div>
-                  <h2 className="hero-title">
-                    {selectedStock.name}
-                  </h2>
-                  <p className="hero-meta">
-                    <span>{selectedStock.symbol}</span>
-                    <span>{formatMoney(selectedStock.price, selectedStock.currency)}</span>
-                    <span>환산 {formatMoney(selectedStock.priceKrw, "KRW")}</span>
-                  </p>
-                </div>
-                <div className="price-stack">
-                  <strong>{formatMoney(selectedStock.priceKrw, "KRW")}</strong>
-                  <span className={`change-pill ${selectedStock.change >= 0 ? "up" : "down"}`}>
-                    {selectedStock.change >= 0 ? "+" : ""}
-                    {selectedStock.change.toFixed(2)} {selectedStock.currency} (
-                    {selectedStock.percentChange.toFixed(2)}%)
+                  <strong>{selectedHolding.quote.name}</strong>
+                  <span>
+                    {selectedHolding.quote.exchange || "US Market"} · 최근 갱신 {formatDateTime(selectedHolding.quote.lastUpdated)}
                   </span>
                 </div>
-              </section>
+                <div className="detail-price">
+                  <strong>{formatUSDOrEmpty(selectedHolding.quote.priceUsd, selectedHolding.dataStatus?.price === "missing")}</strong>
+                  <span className={selectedGain >= 0 ? "up" : "down"}>
+                    {formatUSDOrEmpty(selectedGain, selectedHolding.dataStatus?.price === "missing")} · {formatPercentOrEmpty(selectedHolding.quote.changePercent, selectedHolding.dataStatus?.price === "missing")}
+                  </span>
+                </div>
+              </div>
 
-              <section className="stats-grid">
-                <div className="panel stat-card">
-                  <span>입력한 총 투자금액</span>
-                  <strong>{formatMoney(totalBudget, "KRW")}</strong>
+              <div className="detail-metrics">
+                <div>
+                  <span>보유수량</span>
+                  <strong>{selectedHolding.holding.shares}주</strong>
                 </div>
-                <div className="panel stat-card">
-                  <span>{selectedStock.name} 투자금액</span>
-                  <strong>{formatMoney(selectedEntry.amountKrw, "KRW")}</strong>
+                <div>
+                  <span>평균 매수가</span>
+                  <strong>{formatUSDOrEmpty(selectedHolding.holding.avgPriceUsd, selectedHolding.holding.avgPriceUsd === 0)}</strong>
                 </div>
-                <div className="panel stat-card">
-                  <span>현재가 기준 추정 수량</span>
-                  <strong>{formatNumber(selectedEstimatedUnits, 4)}주</strong>
+                <div>
+                  <span>예상 월 배당</span>
+                  <strong>{formatUSDOrEmpty(selectedHolding.monthlyDividend, selectedHolding.dataStatus?.dividends === "missing")}</strong>
                 </div>
-                <div className="panel stat-card">
-                  <span>적용 환율</span>
-                  <strong>
-                    1 {selectedStock.currency} = {formatMoney(selectedStock.fxRateToKrw, "KRW")}
-                  </strong>
+                <div>
+                  <span>예상 연 배당</span>
+                  <strong>{formatUSDOrEmpty(selectedHolding.annualDividend, selectedHolding.dataStatus?.dividends === "missing")}</strong>
                 </div>
-              </section>
+                <div>
+                  <span>배당수익률</span>
+                  <strong>{formatPercentOrEmpty(selectedHolding.yieldPercent, selectedHolding.dataStatus?.price === "missing" || selectedHolding.dataStatus?.dividends === "missing")}</strong>
+                </div>
+                <div>
+                  <span>다음 지급일</span>
+                  <strong>{formatDate(selectedHolding.nextPaymentDate)}</strong>
+                </div>
+              </div>
 
-              <section className="panel chart-card">
-                <div className="chart-header">
+              <div className="detail-note">
+                <span>메모</span>
+                <p>{selectedHolding.holding.note || "메모가 없습니다."}</p>
+              </div>
+
+              {selectedHolding.warnings?.length ? (
+                <div className="loading-box">
+                  {selectedHolding.warnings.map((warning) => (
+                    <div key={warning}>{warning}</div>
+                  ))}
+                </div>
+              ) : null}
+
+              <div className="chart-card">
+                <div className="section-head compact">
                   <div>
-                    <h3>30일 종가 흐름</h3>
-                    <p className="hint" style={{ margin: "6px 0 0" }}>
-                      차트는 선택한 종목만 불러옵니다. 원통화 기준 종가 흐름이며 환율은 현재 환율
-                      기준으로 별도 환산해 보여줍니다.
-                    </p>
+                    <h3>30일 가격 흐름</h3>
+                    <p>선택한 종목만 불러오는 차트입니다.</p>
                   </div>
                   <span className="subtle">
-                    {chartUpdatedAt
-                      ? `차트 갱신 ${formatPreciseTime(chartUpdatedAt)} · ${formatRelativeTime(chartUpdatedAt, nowMs)}`
-                      : updatedAt
-                        ? `시세 갱신 ${formatPreciseTime(updatedAt)} · ${formatRelativeTime(updatedAt, nowMs)}`
-                        : ""}
+                    {chartUpdatedAt ? `${formatDateTime(chartUpdatedAt)} · ${formatRelativeTime(chartUpdatedAt, nowMs)}` : "-"}
                   </span>
                 </div>
                 {chartMessage ? <div className="error-box">{chartMessage}</div> : null}
-                {chartLoading && !selectedSeries.length ? (
-                  <div className="loading-box">선택한 종목의 차트를 불러오는 중입니다...</div>
+                {chartLoading && !selectedSeries.length ? <div className="loading-box">차트를 불러오는 중입니다...</div> : null}
+                {!chartLoading || selectedSeries.length ? (
+                  <StockChart data={selectedSeries} positive={selectedGain >= 0} />
                 ) : null}
-                {!chartLoading && !chartMessage ? (
-                  <StockChart data={selectedSeries} positive={selectedStock.change >= 0} />
-                ) : null}
-              </section>
+              </div>
 
-              <section className="panel summary-card">
-                <div className="panel-title">
-                  <h3>입력 금액 기준 요약</h3>
-                  <span className="subtle">이름 검색 기반 선택</span>
+              <div className="mini-table-block">
+                <div className="section-head compact">
+                  <div>
+                    <h3>최근 배당 내역</h3>
+                    <p>배당락일과 지급일을 빠르게 확인합니다.</p>
+                  </div>
+                  <span className="subtle">{selectedHolding.dividends.length}건</span>
                 </div>
-                <table className="summary-table">
-                  <thead>
-                    <tr>
-                      <th>종목</th>
-                      <th>투자금액</th>
-                      <th>현재가</th>
-                      <th>원화 환산가</th>
-                      <th>현재가 기준 추정 수량</th>
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {holdingsSummary.map((item) => (
-                      <tr key={item.symbol}>
-                        <td>{item.name}</td>
-                        <td>{formatMoney(item.amountKrw, "KRW")}</td>
-                        <td>{formatMoney(item.stock.price, item.stock.currency)}</td>
-                        <td>{formatMoney(item.stock.priceKrw, "KRW")}</td>
-                        <td>{formatNumber(item.estimatedUnits, 4)}주</td>
+                {selectedHolding.dividends.length ? (
+                  <table className="note-mini-table">
+                    <thead>
+                      <tr>
+                        <th>배당락일</th>
+                        <th>지급일</th>
+                        <th>배당금/주</th>
                       </tr>
-                    ))}
-                  </tbody>
-                </table>
-              </section>
+                    </thead>
+                    <tbody>
+                      {selectedHolding.dividends.slice(0, 5).map((item) => (
+                        <tr key={`${item.symbol}-${item.date}`}>
+                          <td>{formatDate(item.recordDate)}</td>
+                          <td>{formatDate(item.paymentDate)}</td>
+                          <td>{formatUSDOrEmpty(item.dividendPerShare, item.dividendPerShare === 0)}</td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                ) : (
+                  <div className="empty note-empty">
+                    현재 플랜에서는 배당 이력 데이터를 가져오지 못했습니다. 최근 종가와 수익률만 표시됩니다.
+                  </div>
+                )}
+              </div>
             </>
-          ) : null}
-        </div>
+          ) : (
+            <div className="empty note-empty">왼쪽 목록에서 종목을 선택하면 상세가 보입니다.</div>
+          )}
+        </aside>
+      </section>
+
+      <section className="note-grid note-grid--bottom">
+        <article className="note-card">
+          <div className="section-head">
+            <div>
+              <h2>월별 예상 배당</h2>
+              <p>종목별 예상 배당금을 모아둔 요약입니다.</p>
+            </div>
+            <span className="subtle">포트폴리오 합계</span>
+          </div>
+          <table className="note-table compact-table">
+            <thead>
+              <tr>
+                <th>종목</th>
+                <th>월 배당</th>
+                <th>연 배당</th>
+                <th>배당수익률</th>
+              </tr>
+            </thead>
+            <tbody>
+              {(portfolio?.items ?? []).map((item) => (
+                <tr key={item.quote.symbol}>
+                  <td>
+                    <strong>{item.quote.name}</strong>
+                    <span>{item.quote.symbol}</span>
+                  </td>
+                  <td>{formatUSDOrEmpty(item.monthlyDividend, item.dataStatus?.dividends === "missing")}</td>
+                  <td>{formatUSDOrEmpty(item.annualDividend, item.dataStatus?.dividends === "missing")}</td>
+                  <td>{formatPercentOrEmpty(item.yieldPercent, item.dataStatus?.price === "missing" || item.dataStatus?.dividends === "missing")}</td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </article>
+
+        <article className="note-card">
+          <div className="section-head">
+            <div>
+              <h2>가까운 배당 일정</h2>
+              <p>배당락일과 지급일이 가까운 종목을 위로 정렬했습니다.</p>
+            </div>
+            <span className="subtle">포트폴리오 전체</span>
+          </div>
+          <table className="note-mini-table">
+            <thead>
+              <tr>
+                <th>종목</th>
+                <th>배당락일</th>
+                <th>지급일</th>
+                <th>월 배당</th>
+              </tr>
+            </thead>
+            <tbody>
+              {upcomingDividends.slice(0, 6).map((item) => (
+                <tr key={item.symbol}>
+                  <td>{item.name}</td>
+                  <td>{formatDate(item.nextExDate)}</td>
+                  <td>{formatDate(item.nextPaymentDate)}</td>
+                  <td>{formatUSDOrEmpty(item.monthlyDividend, item.monthlyDividend === 0)}</td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </article>
       </section>
     </main>
   );

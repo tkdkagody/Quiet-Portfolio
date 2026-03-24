@@ -124,18 +124,18 @@ export function StockSearchRow({
               type="button"
               onClick={() =>
                 onChange(row.id, {
-                  query: result.instrumentName,
+                  query: result.name,
                   symbol: result.symbol,
-                  name: result.instrumentName,
+                  name: result.name,
                   exchange: result.exchange
                 })
               }
             >
-              <strong>{result.instrumentName}</strong>
+              <strong>{result.name}</strong>
               <span>
                 {result.symbol}
                 {result.exchange ? ` · ${result.exchange}` : ""}
-                {result.country ? ` · ${result.country}` : ""}
+                {result.currency ? ` · ${result.currency}` : ""}
               </span>
             </button>
           ))}
@@ -143,16 +143,39 @@ export function StockSearchRow({
       ) : null}
 
       <label className="field">
-        <span>투자금액 (KRW)</span>
+        <span>보유수량</span>
         <input
           inputMode="numeric"
-          value={row.amountKrw}
+          value={row.shares}
           onChange={(event) =>
             onChange(row.id, {
-              amountKrw: event.target.value.replace(/[^\d.]/g, "")
+              shares: event.target.value.replace(/[^\d.]/g, "")
             })
           }
-          placeholder="1000000"
+          placeholder="10"
+        />
+      </label>
+
+      <label className="field">
+        <span>평단가 (USD)</span>
+        <input
+          inputMode="decimal"
+          value={row.avgPriceUsd}
+          onChange={(event) =>
+            onChange(row.id, {
+              avgPriceUsd: event.target.value.replace(/[^\d.]/g, "")
+            })
+          }
+          placeholder="75.00"
+        />
+      </label>
+
+      <label className="field">
+        <span>메모</span>
+        <input
+          value={row.note}
+          onChange={(event) => onChange(row.id, { note: event.target.value })}
+          placeholder="예: 은퇴용 배당주"
         />
       </label>
     </div>
